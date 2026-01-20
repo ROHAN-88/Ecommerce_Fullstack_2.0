@@ -1,31 +1,80 @@
 import Link from "next/link";
+import SearchFilters from "@/components/SearchFilters";
 
-export default function Home() {
+// Force dynamic rendering since we rely on searchParams
+export const dynamic = 'force-dynamic';
+
+async function getProducts(
+    searchParams?: Record<string, string | string[] | undefined>
+) {
+    const paramsObj = searchParams || {};
+    const cleanParams = new URLSearchParams();
+
+    for (const key of Object.keys(paramsObj)) {
+        const val = paramsObj[key];
+        if (!val) continue;
+
+        if (Array.isArray(val)) {
+            val.forEach(v => v && cleanParams.append(key, v));
+        } else {
+            cleanParams.append(key, val);
+        }
+    }
+
+    try {
+        const res = await fetch(`http://localhost:5000/api/products?${cleanParams.toString()}`, {
+            cache: 'no-store',
+        });
+        if (!res.ok) return [];
+        return res.json();
+    } catch (err) {
+        console.error('Failed to fetch products', err);
+        return [];
+    }
+}
+export default async function Home({
+    searchParams,
+}: {
+    searchParams?: Record<string, string | string[] | undefined>;
+}) {
+    const products = await getProducts(searchParams);
+
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <section className="mb-12">
-                <h2 className="text-3xl font-bold mb-6">Top Products</h2>
-                <div className="bg-gray-100 p-10 text-center rounded-lg">
-                    <p className="text-xl text-gray-500">Carousel Placeholder</p>
+            <h1 className="text-4xl font-bold mb-6 text-gray-900">Marketplace</h1>
+            <SearchFilters />
+            <h2 className="text-2xl font-bold mb-6">Results ({products.length})</h2>
+            {products.length === 0 ? (
+                <div className="text-center py-10 text-gray-500">
+                    No products found matching your criteria.
                 </div>
-            </section>
-
-            <section>
-                <h2 className="text-3xl font-bold mb-6">Explore Products</h2>
+            ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    {/* Mock Product Grid */}
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
-                        <div key={item} className="border rounded-lg p-4 shadow-sm hover:shadow-md transition">
-                            <div className="h-40 bg-gray-200 rounded mb-4"></div>
-                            <h3 className="font-semibold text-lg">Product {item}</h3>
-                            <p className="text-gray-600">$99.99</p>
-                            <Link href={`/products/${item}`} className="text-blue-600 hover:underline text-sm mt-2 block">
+                    {products.map((item: any) => (
+                        <div
+                            key={item.id}
+                            className="border rounded-lg p-4 shadow-sm hover:shadow-md transition bg-white"
+                        >
+                            <div className="h-40 bg-gray-200 rounded mb-4 flex items-center justify-center overflow-hidden relative">
+                                {item.image_url ? (
+                                    <Image src={item.image_url} alt={item.name} fill className="object-cover" />
+                                ) : (
+                                    <span className="text-gray-400">No Image</span>
+                                )}
+                            </div>
+                            <h3 className="font-semibold text-lg truncate">{item.name}</h3>
+                            <p className="text-green-600 font-bold">${item.price}</p>
+                            <p className="text-sm text-gray-500 capitalize">{item.category}</p>
+                            <Link
+                                href={`/products/${item.id}`}
+                                className="text-blue-600 hover:underline text-sm mt-2 block"
+                            >
                                 View Details
                             </Link>
                         </div>
                     ))}
                 </div>
-            </section>
+            )}
         </div>
     );
 }

@@ -32,13 +32,50 @@ app.get('/api/health', async (req, res) => {
 });
 
 import authRoutes from './routes/authRoutes.js';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import { createUsersTable } from './models/userModel.js';
+import { createProductsTable } from './models/productModel.js';
+import { createChatTables } from './models/chatModel.js';
 
 // Init DB
 createUsersTable();
+createProductsTable();
+createChatTables();
+
+import chatRoutes from './routes/chatRoutes.js';
+import productRoutes from './routes/productRoutes.js';
 
 app.use('/api/auth', authRoutes);
+app.use('/api/chats', chatRoutes);
+app.use('/api/products', productRoutes);
+const server = createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "http://localhost:3000",
+        methods: ["GET", "POST"]
+    }
+});
 
-app.listen(PORT, () => {
+app.set('io', io); // Make io accessible in controllers
+
+io.on('connection', (socket) => {
+    console.log(`User Connected: ${socket.id}`);
+
+    socket.on('join_chat', (data) => {
+        socket.join(data);
+        console.log(`User with ID: ${socket.id} joined room: ${data}`);
+    });
+
+    socket.on('send_message', (data) => {
+        socket.to(data.room).emit('receive_message', data);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User Disconnected', socket.id);
+    });
+});
+
+server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
