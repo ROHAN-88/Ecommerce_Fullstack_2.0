@@ -20,7 +20,11 @@ export const getProducts = async (req, res) => {
 
 export const getProduct = async (req, res) => {
     try {
-        const product = await getProductById(req.params.id);
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) {
+            return res.status(400).json({ message: 'Invalid product ID' });
+        }
+        const product = await getProductById(id);
         if (!product) return res.status(404).json({ message: 'Product not found' });
         res.json(product);
     } catch (err) {
@@ -44,14 +48,14 @@ export const getSellerProducts = async (req, res) => {
 
 export const addProduct = async (req, res) => {
     try {
-        const { name, description, price, category, image_url } = req.body;
+        const { name, description, price, category, image_url, location } = req.body;
         const seller_id = req.user.id; // From JWT
 
         if (req.user.role !== 'seller') {
             return res.status(403).json({ message: 'Only sellers can add products' });
         }
 
-        const newProduct = await createProduct({ name, description, price, category, image_url, seller_id });
+        const newProduct = await createProduct({ name, description, price, category, image_url, location, seller_id });
         res.status(201).json(newProduct);
     } catch (err) {
         console.error(err);

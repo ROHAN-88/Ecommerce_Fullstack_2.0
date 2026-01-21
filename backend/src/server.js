@@ -66,6 +66,11 @@ import adRoutes from './routes/adRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import wishlistRoutes from './routes/wishlistRoutes.js';
 
+import swaggerUi from 'swagger-ui-express';
+import specs from './config/swagger.js';
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
 app.use('/api/auth', authRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/products', productRoutes);

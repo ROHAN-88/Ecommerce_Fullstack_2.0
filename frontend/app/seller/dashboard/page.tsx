@@ -1,261 +1,381 @@
-'use client';
+'use client'
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import api from '@/lib/axios';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { toast } from 'sonner';
+import { useState, useEffect } from 'react'
+import { Navbar } from '@/components/navbar'
+import { SellerSidebar } from '@/components/seller-sidebar'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { ChatList } from '@/components/chat-list'
+import { ChatInterface } from '@/components/chat-interface'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Edit2, Trash2, Plus, MessageSquare, Phone, MapPin } from 'lucide-react'
+import { getSellerProducts, Product } from '@/lib/api/products'
+import { AddProductDialog } from '@/components/add-product-dialog'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Plus, LayoutGrid, Package, Receipt, ShoppingCart } from 'lucide-react';
+// Mock data
+const mockProducts = [
+  {
+    id: '1',
+    name: 'Premium Wireless Headphones',
+    price: 4500,
+    stock: 15,
+    status: 'Active',
+    sales: 28,
+  },
+  {
+    id: '2',
+    name: 'USB Type-C Cable (Pack of 3)',
+    price: 499,
+    stock: 50,
+    status: 'Active',
+    sales: 142,
+  },
+  {
+    id: '3',
+    name: 'Phone Case - Black',
+    price: 299,
+    stock: 0,
+    status: 'Out of Stock',
+    sales: 89,
+  },
+  {
+    id: '4',
+    name: 'Screen Protector (Pack of 2)',
+    price: 199,
+    stock: 35,
+    status: 'Active',
+    sales: 76,
+  },
+]
 
-const productSchema = z.object({
-    name: z.string().min(2, "Name is required"),
-    price: z.coerce.number().min(1, "Price must be positive"),
-    category: z.string().min(2, "Category is required"),
-    description: z.string().optional(),
-    image_url: z.string().url("Must be a valid URL").optional().or(z.literal('')),
-});
+const mockConversations = [
+  {
+    id: 'conv-1',
+    participantName: 'Rajesh Kumar',
+    lastMessage: 'Do you have this in stock?',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    isRead: false,
+  },
+  {
+    id: 'conv-2',
+    participantName: 'Priya Singh',
+    lastMessage: 'Thank you for the quick delivery!',
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
+    isRead: true,
+  },
+  {
+    id: 'conv-3',
+    participantName: 'Amit Patel',
+    lastMessage: 'Can you deliver by tomorrow?',
+    timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+    isRead: true,
+  },
+]
+
+const mockChatMessages = [
+  {
+    id: 'msg-1',
+    sender: 'buyer' as const,
+    senderName: 'Rajesh Kumar',
+    content: 'Hi! Do you have this in stock?',
+    timestamp: new Date(Date.now() - 30 * 60 * 1000),
+  },
+  {
+    id: 'msg-2',
+    sender: 'seller' as const,
+    senderName: 'You',
+    content: 'Yes, we have 15 units available.',
+    timestamp: new Date(Date.now() - 25 * 60 * 1000),
+  },
+  {
+    id: 'msg-3',
+    sender: 'buyer' as const,
+    senderName: 'Rajesh Kumar',
+    content: 'Great! I would like to place an order.',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
+  },
+]
+
+const sellerInfo = {
+  shopName: 'Tech Store Pro',
+  phone: '+91 98765 43210',
+  location: 'Mumbai, Maharashtra',
+}
+
+import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
 
 export default function SellerDashboard() {
-    const { user, token } = useAuth();
-    const router = useRouter();
-    const [products, setProducts] = useState<any[]>([]);
-    const [stats, setStats] = useState({ views: 0, sales: 0, orders: 0 });
-    const [loading, setLoading] = useState(true);
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const router = useRouter()
+  const { user, isLoading } = useAuth()
+  const [activeTab, setActiveTab] = useState('overview')
+  const [selectedConversation, setSelectedConversation] = useState(mockConversations[0]?.id)
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
 
-    const form = useForm<z.infer<typeof productSchema>>({
-        resolver: zodResolver(productSchema),
-        defaultValues: { name: '', price: 0, category: '', description: '', image_url: '' },
-    });
+  const selectedChat = mockConversations.find((c) => c.id === selectedConversation)
 
-    useEffect(() => {
-        if (!token) return;
-        if (user && user.role !== 'seller') {
-            router.push('/dashboard');
-            return;
-        }
-        fetchSellerData();
-    }, [token, user]);
-
-    const fetchSellerData = async () => {
-        try {
-            const res = await api.get('/api/products/my-products');
-            setProducts(res.data);
-            // Mock Stats
-            setStats({ views: 120, sales: 15, orders: 5 });
-        } catch (err) {
-            console.error("Error fetching seller data", err);
-            // toast.error("Failed to load products");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    async function onAddProduct(values: z.infer<typeof productSchema>) {
-        try {
-            await api.post('/api/products', values);
-            toast.success("Product added successfully");
-            setIsDialogOpen(false);
-            form.reset();
-            fetchSellerData(); // Refresh list
-        } catch (error: any) {
-            const msg = error.response?.data?.message || 'Failed to add product';
-            toast.error(msg);
-        }
+  // Auth check
+  useEffect(() => {
+    if (!isLoading) {
+      if (!user || user.role !== 'seller') {
+        router.push('/login')
+      }
     }
+  }, [isLoading, user, router])
 
-    if (loading) return <div className="p-8 text-center">Loading dashboard...</div>;
-
+  if (isLoading) {
     return (
-        <div className="max-w-7xl mx-auto px-4 py-8">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  if (!user || user.role !== 'seller') return null
+
+  // Fetch seller products
+  useEffect(() => {
+    loadProducts()
+  }, [])
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true)
+      const data = await getSellerProducts()
+      setProducts(data)
+    } catch (error) {
+      console.error('Error loading products:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Navbar />
+
+      <div className="flex h-[calc(100vh-64px)]">
+        <SellerSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Seller Dashboard</h1>
-                    <p className="text-muted-foreground">Manage your products and orders</p>
+                  <h1 className="text-3xl font-bold text-foreground">Dashboard Overview</h1>
+                  <p className="text-muted-foreground mt-2">Welcome to your seller dashboard</p>
                 </div>
 
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" /> Add Product
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                        <DialogHeader>
-                            <DialogTitle>Add New Product</DialogTitle>
-                        </DialogHeader>
-                        <Form {...form}>
-                            <form onSubmit={form.handleSubmit(onAddProduct)} className="space-y-4">
-                                <FormField
-                                    control={form.control}
-                                    name="name"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Product Name</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="Smartphone..." {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <div className="grid grid-cols-2 gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name="price"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Price ($)</FormLabel>
-                                                <FormControl>
-                                                    <Input type="number" {...field} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <FormField
-                                        control={form.control}
-                                        name="category"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Category</FormLabel>
-                                                <FormControl>
-                                                    <Input placeholder="Electronics" {...field} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Total Sales</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold text-primary">₹95,232</p>
+                      <p className="text-xs text-muted-foreground mt-1">+12% from last month</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Orders</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold text-primary">335</p>
+                      <p className="text-xs text-muted-foreground mt-1">+18 this week</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Active Products</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold text-primary">3</p>
+                      <p className="text-xs text-muted-foreground mt-1">1 out of stock</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Rating</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-2xl font-bold text-primary">4.7</p>
+                      <p className="text-xs text-muted-foreground mt-1">512 reviews</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {/* Products Tab */}
+            {activeTab === 'products' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-3xl font-bold text-foreground">My Products</h1>
+                    <p className="text-muted-foreground mt-2">Manage your product listings</p>
+                  </div>
+                  <AddProductDialog onProductAdded={loadProducts} />
+                </div>
+
+                <Card>
+                  <CardContent className="p-0">
+                    {loading ? (
+                      <div className="flex justify-center items-center py-12">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                      </div>
+                    ) : products.length === 0 ? (
+                      <div className="text-center py-12">
+                        <p className="text-muted-foreground">No products yet. Create your first product!</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Product Name</TableHead>
+                            <TableHead>Price</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Location</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {products.map((product) => (
+                            <TableRow key={product.id}>
+                              <TableCell className="font-medium">{product.name}</TableCell>
+                              <TableCell>₹{product.price.toLocaleString()}</TableCell>
+                              <TableCell>{product.category || 'N/A'}</TableCell>
+                              <TableCell>{product.location || 'N/A'}</TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
                                 </div>
-                                <FormField
-                                    control={form.control}
-                                    name="image_url"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Image URL (Optional)</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="https://..." {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="description"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Description</FormLabel>
-                                            <FormControl>
-                                                <Textarea placeholder="Describe your product..." {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <Button type="submit" className="w-full">Save Product</Button>
-                            </form>
-                        </Form>
-                    </DialogContent>
-                </Dialog>
-            </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-                        <Receipt className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">${stats.sales * 100}</div>
-                        <p className="text-xs text-muted-foreground">+20.1% from last month</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
-                        <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.orders}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Product Views</CardTitle>
-                        <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.views}</div>
-                    </CardContent>
-                </Card>
-            </div>
+            {/* Messages Tab */}
+            {activeTab === 'messages' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-foreground">Messages</h1>
+                  <p className="text-muted-foreground mt-2">Chat with your customers</p>
+                </div>
 
-            {/* Products Table */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Package className="h-5 w-5" /> My Products
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="rounded-md border">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Image</TableHead>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Price</TableHead>
-                                    <TableHead>Category</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {products.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
-                                            No products found. Start selling today!
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    products.map((product) => (
-                                        <TableRow key={product.id}>
-                                            <TableCell>
-                                                {product.image_url ? (
-                                                    <img src={product.image_url} alt={product.name} className="w-10 h-10 object-cover rounded" />
-                                                ) : (
-                                                    <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">N/A</div>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="font-medium">{product.name}</TableCell>
-                                            <TableCell>${product.price}</TableCell>
-                                            <TableCell>{product.category}</TableCell>
-                                            <TableCell>
-                                                <Button variant="ghost" size="sm" asChild>
-                                                    <Link href={`/products/${product.id}`}>View</Link>
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
+                  {/* Conversations List */}
+                  <div className="lg:col-span-1 border border-border rounded-lg p-4 overflow-hidden flex flex-col">
+                    <h3 className="font-semibold text-foreground mb-4">Conversations</h3>
+                    <div className="flex-1 overflow-y-auto">
+                      <ChatList
+                        conversations={mockConversations}
+                        selectedId={selectedConversation}
+                        onSelectConversation={setSelectedConversation}
+                      />
                     </div>
-                </CardContent>
-            </Card>
-        </div>
-    );
+                  </div>
+
+                  {/* Chat Interface */}
+                  <div className="lg:col-span-2">
+                    {selectedChat && (
+                      <div className="h-full flex flex-col">
+                        <div className="pb-4 border-b border-border">
+                          <h3 className="font-semibold text-foreground text-lg">{selectedChat.participantName}</h3>
+                          <p className="text-xs text-muted-foreground">Customer</p>
+                        </div>
+                        <ChatInterface
+                          messages={mockChatMessages}
+                          currentUserRole="seller"
+                          onSendMessage={(msg) => console.log('Message sent:', msg)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Profile Tab */}
+            {activeTab === 'profile' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-foreground">Shop Profile</h1>
+                  <p className="text-muted-foreground mt-2">Manage your shop information</p>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Shop Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Shop Name</label>
+                      <input
+                        type="text"
+                        defaultValue={sellerInfo.shopName}
+                        className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                        <Phone className="w-4 h-4" />
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        defaultValue={sellerInfo.phone}
+                        className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        Location
+                      </label>
+                      <input
+                        type="text"
+                        defaultValue={sellerInfo.location}
+                        className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <div className="pt-4">
+                      <Button>Save Changes</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
+  )
 }

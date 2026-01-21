@@ -9,6 +9,7 @@ export const createProductsTable = async () => {
       price DECIMAL(10, 2) NOT NULL,
       category VARCHAR(100),
       image_url VARCHAR(255),
+      location VARCHAR(255),
       seller_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`;
@@ -29,13 +30,13 @@ ON products USING GIN(to_tsvector('english', name));
 };
 
 export const createProduct = async (product) => {
-    const { name, description, price, category, image_url, seller_id } = product;
+    const { name, description, price, category, image_url, location, seller_id } = product;
     const text = `
-        INSERT INTO products (name, description, price, category, image_url, seller_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO products (name, description, price, category, image_url, location, seller_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *;
     `;
-    const { rows } = await query(text, [name, description, price, category, image_url, seller_id]);
+    const { rows } = await query(text, [name, description, price, category, image_url, location, seller_id]);
     return rows[0];
 };
 

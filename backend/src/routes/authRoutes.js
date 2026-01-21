@@ -23,7 +23,7 @@ const matchAndToken = (req, res) => {
     // Redirect to frontend with token
     // In production, consider secure cookie or a temporary code exchange.
     // For MVP, passing in URL hash or query param ok if immediately consumed and cleared.
-    res.redirect(`http://localhost:3000/auth/callback?token=${token}&role=${user.role}&name=${encodeURIComponent(user.name)}`);
+    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&role=${user.role}&name=${encodeURIComponent(user.name)}`);
 };
 
 // Google Routes
