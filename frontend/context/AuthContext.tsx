@@ -1,5 +1,6 @@
 "use client";
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
 
 interface User {
@@ -24,28 +25,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const router = useRouter();
 
     useEffect(() => {
-        // Check localStorage on mount
-        const storedToken = localStorage.getItem('token');
-        const storedUser = localStorage.getItem('user');
+        // Check Cookies on mount
+        const storedToken = Cookies.get('token');
+        const storedUser = Cookies.get('user');
 
         if (storedToken && storedUser) {
             setToken(storedToken);
-            setUser(JSON.parse(storedUser));
+            try {
+                setUser(JSON.parse(storedUser));
+            } catch (e) {
+                console.error("Failed to parse user cookie", e);
+            }
         }
     }, []);
 
     const login = useCallback((newToken: string, newUser: User) => {
         setToken(newToken);
         setUser(newUser);
-        localStorage.setItem('token', newToken);
-        localStorage.setItem('user', JSON.stringify(newUser));
+        Cookies.set('token', newToken, { expires: 7 }); // 7 days
+        Cookies.set('user', JSON.stringify(newUser), { expires: 7 });
     }, []);
 
     const logout = () => {
         setToken(null);
         setUser(null);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        Cookies.remove('token');
+        Cookies.remove('user');
         router.push('/login');
     };
 

@@ -9,20 +9,38 @@ export default function SingleChatPage({ params }: { params: Promise<{ id: strin
     const { user, token } = useAuth();
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [otherUser, setOtherUser] = useState(null);
+    const [otherUser, setOtherUser] = useState<{ name: string, id: number } | null>(null);
 
     useEffect(() => {
         if (!token) return;
 
-        const fetchMessages = async () => {
+        const fetchChatData = async () => {
             try {
-                const res = await fetch(`http://localhost:5000/api/chats/${id}/messages`, {
+                // Fetch messages
+                const msgRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chats/${id}/messages`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                if (res.ok) {
-                    const data = await res.json();
+                if (msgRes.ok) {
+                    const data = await msgRes.json();
                     setMessages(data);
                 }
+
+                // Fetch chat details
+                const chatRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chats/${id}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (chatRes.ok) {
+                    const chatData = await chatRes.json();
+                    if (user) {
+                        const isBuyer = user.id === chatData.buyer_id;
+                        setOtherUser({
+                            name: isBuyer ? chatData.seller_name : chatData.buyer_name,
+                            id: isBuyer ? chatData.seller_id : chatData.buyer_id
+                        });
+                    }
+                }
+
             } catch (err) {
                 console.error(err);
             } finally {
@@ -30,8 +48,8 @@ export default function SingleChatPage({ params }: { params: Promise<{ id: strin
             }
         };
 
-        fetchMessages();
-    }, [id, token]);
+        if (user) fetchChatData();
+    }, [id, token, user]);
 
     if (loading) return <div className="p-8">Loading chat...</div>;
 

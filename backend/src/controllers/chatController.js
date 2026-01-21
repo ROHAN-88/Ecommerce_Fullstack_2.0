@@ -23,6 +23,36 @@ export const initiateChat = async (req, res) => {
     }
 };
 
+export const getChatById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const text = `
+            SELECT c.*, 
+                   p.name as product_name, p.image_url as product_image,
+                   u_buyer.name as buyer_name, u_seller.name as seller_name
+            FROM chats c
+            JOIN products p ON c.product_id = p.id
+            JOIN users u_buyer ON c.buyer_id = u_buyer.id
+            JOIN users u_seller ON c.seller_id = u_seller.id
+            WHERE c.id = $1
+        `;
+        const { rows } = await query(text, [id]);
+
+        if (rows.length === 0) return res.status(404).json({ message: 'Chat not found' });
+
+        const chat = rows[0];
+        // Ensure user is part of the chat
+        if (chat.buyer_id !== req.user.id && chat.seller_id !== req.user.id) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        res.json(chat);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error fetching chat details' });
+    }
+};
+
 export const getUserChats = async (req, res) => {
     try {
         const userId = req.user.id;

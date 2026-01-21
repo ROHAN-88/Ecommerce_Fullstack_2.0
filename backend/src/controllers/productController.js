@@ -1,4 +1,4 @@
-import { createProduct, getAllProducts, getProductById, getProductsWithFilters } from '../models/productModel.js';
+import { createProduct, getAllProducts, getProductById, getProductsWithFilters, getProductsBySellerId } from '../models/productModel.js';
 
 export const getProducts = async (req, res) => {
     try {
@@ -26,6 +26,19 @@ export const getProduct = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Error fetching product' });
+    }
+};
+
+export const getSellerProducts = async (req, res) => {
+    try {
+        if (req.user.role !== 'seller') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        const products = await getProductsBySellerId(req.user.id);
+        res.json(products);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error fetching seller products' });
     }
 };
 

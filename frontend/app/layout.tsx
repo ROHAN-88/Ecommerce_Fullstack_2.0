@@ -1,6 +1,7 @@
 import "./globals.css";
-import Navbar from "../components/Navbar";
-import { AuthProvider } from "../context/AuthContext";
+import Navbar from "@/components/Navbar";
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata = {
     title: "E-Commerce Market",
@@ -14,12 +15,11 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body>
+            <body className="bg-gray-50 text-gray-900">
                 <AuthProvider>
                     <Navbar />
-                    <main className="min-h-screen p-4">
-                        {children}
-                    </main>
+                    {children}
+                    <Toaster position="bottom-right" />
                 </AuthProvider>
             </body>
         </html>

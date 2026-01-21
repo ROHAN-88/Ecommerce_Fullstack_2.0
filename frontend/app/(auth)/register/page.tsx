@@ -1,137 +1,255 @@
 "use client";
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import OAuthButton from '../../../components/OAuthButton';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { toast } from 'sonner';
+import api from '@/lib/axios';
+import Link from 'next/link';
+import OAuthButton from '@/components/OAuthButton';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardHeader, CardContent, CardTitle, CardFooter } from '@/components/ui/card';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+
+const formSchema = z.object({
+    name: z.string().min(2, "Name is required"),
+    email: z.string().email(),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    role: z.enum(['buyer', 'seller']),
+    // Seller Fields (Optional initially, refined later)
+    phone: z.string().optional(),
+    citizenship_id: z.string().optional(),
+    pan_number: z.string().optional(),
+}).superRefine((data, ctx) => {
+    if (data.role === 'seller') {
+        if (!data.phone || data.phone.length < 10) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Phone number is required for sellers (min 10 digits)",
+                path: ["phone"]
+            });
+        }
+        if (!data.citizenship_id || data.citizenship_id.length < 5) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Citizenship ID is required for sellers",
+                path: ["citizenship_id"]
+            });
+        }
+    }
+});
 
 export default function RegisterPage() {
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [role, setRole] = useState('buyer');
-    const [error, setError] = useState('');
     const router = useRouter();
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
+    const form = useForm<z.infer<typeof formSchema>>({
+        resolver: zodResolver(formSchema),
+        defaultValues: {
+            name: '',
+            email: '',
+            password: '',
+            role: 'buyer',
+            phone: '',
+            citizenship_id: '',
+            pan_number: ''
+        },
+    });
 
+    // Watch role to conditionally render fields
+    const selectedRole = useWatch({ control: form.control, name: 'role' });
+
+    async function onSubmit(values: z.infer<typeof formSchema>) {
+        setIsLoading(true);
         try {
-            const res = await fetch('http://localhost:5000/api/auth/register', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ name, email, password, role }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.message || 'Registration failed');
+            if (values.role === 'seller') {
+                // Register as Seller
+                await api.post('/api/auth/register-seller', {
+                    name: values.name,
+                    email: values.email,
+                    password: values.password,
+                    phone: values.phone,
+                    citizenship_id: values.citizenship_id,
+                    pan_number: values.pan_number
+                });
+                toast.success("Seller Account created! Please log in.");
+            } else {
+                // Register as Buyer
+                await api.post('/api/auth/register', {
+                    name: values.name,
+                    email: values.email,
+                    password: values.password,
+                    role: 'buyer'
+                });
+                toast.success("Account created! Please log in.");
             }
-
-            // Automatically redirect to login page
             router.push('/login');
-
-        } catch (err: any) {
-            setError(err.message);
+        } catch (error: any) {
+            const msg = error.response?.data?.message || 'Registration failed';
+            toast.error(msg);
+        } finally {
+            setIsLoading(false);
         }
-    };
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full space-y-8">
-                <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Create a new account</h2>
-                </div>
-                <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-                    <div className="rounded-md shadow-sm -space-y-px">
-                        <div>
-                            <input
-                                type="text"
-                                required
-                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="Full Name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
+            <Card className="w-full max-w-md">
+                <CardHeader>
+                    <CardTitle className="text-center text-2xl font-bold">Create Account</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                            <FormField
+                                control={form.control}
+                                name="name"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Full Name</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="John Doe" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
-                        </div>
-                        <div>
-                            <input
-                                type="email"
-                                required
-                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="Email address"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                            <FormField
+                                control={form.control}
+                                name="email"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Email</FormLabel>
+                                        <FormControl>
+                                            <Input type="email" placeholder="email@example.com" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
-                        </div>
-                        <div>
-                            <input
-                                type="password"
-                                required
-                                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                placeholder="Password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+
+                            <FormField
+                                control={form.control}
+                                name="role"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-3">
+                                        <FormLabel>I want to join as a...</FormLabel>
+                                        <FormControl>
+                                            <RadioGroup
+                                                onValueChange={field.onChange}
+                                                defaultValue={field.value}
+                                                className="flex flex-col space-y-1"
+                                            >
+                                                <FormItem className="flex items-center space-x-3 space-y-0">
+                                                    <FormControl>
+                                                        <RadioGroupItem value="buyer" />
+                                                    </FormControl>
+                                                    <FormLabel className="font-normal">
+                                                        Buyer (I want to buy products)
+                                                    </FormLabel>
+                                                </FormItem>
+                                                <FormItem className="flex items-center space-x-3 space-y-0">
+                                                    <FormControl>
+                                                        <RadioGroupItem value="seller" />
+                                                    </FormControl>
+                                                    <FormLabel className="font-normal">
+                                                        Seller (I want to sell products)
+                                                    </FormLabel>
+                                                </FormItem>
+                                            </RadioGroup>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
                             />
-                        </div>
-                        <div className="px-3 py-2 border border-gray-300 rounded-b-md">
-                            <label className="block text-sm font-medium text-gray-700">I am a:</label>
-                            <div className="mt-2 flex gap-4">
-                                <label className="inline-flex items-center">
-                                    <input
-                                        type="radio"
-                                        className="form-radio"
-                                        name="role"
-                                        value="buyer"
-                                        checked={role === 'buyer'}
-                                        onChange={(e) => setRole(e.target.value)}
+
+                            {/* Seller Specific Fields */}
+                            {selectedRole === 'seller' && (
+                                <div className="space-y-4 border-l-2 border-blue-500 pl-4 mt-2">
+                                    <FormField
+                                        control={form.control}
+                                        name="phone"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Phone Number</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="+977..." {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
                                     />
-                                    <span className="ml-2">Buyer</span>
-                                </label>
-                                <label className="inline-flex items-center">
-                                    <input
-                                        type="radio"
-                                        className="form-radio"
-                                        name="role"
-                                        value="seller"
-                                        checked={role === 'seller'}
-                                        onChange={(e) => setRole(e.target.value)}
+                                    <FormField
+                                        control={form.control}
+                                        name="citizenship_id"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Citizenship ID / License</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="ID Number" {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
                                     />
-                                    <span className="ml-2">Seller</span>
-                                </label>
-                            </div>
-                        </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="pan_number"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>PAN Number (Optional)</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="PAN..." {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                            )}
+
+                            <FormField
+                                control={form.control}
+                                name="password"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Password</FormLabel>
+                                        <FormControl>
+                                            <Input type="password" placeholder="******" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <Button type="submit" className="w-full" disabled={isLoading}>
+                                {isLoading ? "Creating Account..." : "Register"}
+                            </Button>
+                        </form>
+                    </Form>
+
+                    <div className="mt-6 flex items-center justify-between">
+                        <div className="border-t w-full border-gray-300"></div>
+                        <span className="px-2 text-sm text-gray-500 bg-white">Or</span>
+                        <div className="border-t w-full border-gray-300"></div>
                     </div>
 
-                    <div>
-                        <button
-                            type="submit"
-                            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                            Register
-                        </button>
+                    <div className="mt-6 space-y-2">
+                        {selectedRole !== 'seller' && (
+                            <OAuthButton provider="google" role="buyer" />
+                        )}
                     </div>
-                </form>
-
-                <div className="mt-6">
-                    <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-300"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm">
-                            <span className="px-2 bg-gray-50 text-gray-500">Or sign up with</span>
-                        </div>
-                    </div>
-
-                    <div className="mt-6 grid grid-cols-1 gap-3">
-                        <OAuthButton provider="google" role={role as 'buyer' | 'seller'} />
-                        <OAuthButton provider="facebook" role={role as 'buyer' | 'seller'} />
-                    </div>
-                </div>
-            </div>
+                </CardContent>
+                <CardFooter className="flex-col justify-center space-y-2">
+                    <p className="text-sm text-gray-600">
+                        Already have an account? <Link href="/login" className="text-blue-600 hover:underline">Log in</Link>
+                    </p>
+                </CardFooter>
+            </Card>
         </div>
     );
 }

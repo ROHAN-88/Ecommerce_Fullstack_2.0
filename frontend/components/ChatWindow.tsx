@@ -4,20 +4,38 @@ import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '@/context/AuthContext';
 
-const socket = io('http://localhost:5000'); // Connect to backend
+const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'); // Connect to backend
 
-export default function ChatWindow({ chatId, initialMessages, otherUser }) {
+interface Message {
+    id: string;
+    content: string;
+    sender_id: number;
+    created_at: string;
+}
+
+interface User {
+    id: number;
+    name: string;
+}
+
+interface ChatWindowProps {
+    chatId: string;
+    initialMessages: Message[];
+    otherUser: User | null;
+}
+
+export default function ChatWindow({ chatId, initialMessages, otherUser }: ChatWindowProps) {
     const { user, token } = useAuth();
-    const [messages, setMessages] = useState(initialMessages || []);
+    const [messages, setMessages] = useState<Message[]>(initialMessages || []);
     const [newMessage, setNewMessage] = useState('');
-    const messagesEndRef = useRef(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         // Join chat room
         socket.emit('join_chat', chatId);
 
         // Listen for incoming messages
-        socket.on('receive_message', (message) => {
+        socket.on('receive_message', (message: Message) => {
             setMessages((prev) => [...prev, message]);
         });
 
@@ -30,12 +48,12 @@ export default function ChatWindow({ chatId, initialMessages, otherUser }) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    const handleSendMessage = async (e) => {
+    const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newMessage.trim()) return;
 
         try {
-            const res = await fetch(`http://localhost:5000/api/chats/${chatId}/messages`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chats/${chatId}/messages`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -1,13 +1,15 @@
 import Link from "next/link";
+import Image from "next/image";
 import SearchFilters from "@/components/SearchFilters";
+import AdBanner from "@/components/AdBanner";
 
 // Force dynamic rendering since we rely on searchParams
 export const dynamic = 'force-dynamic';
 
 async function getProducts(
-    searchParams?: Record<string, string | string[] | undefined>
+    searchParamsPromise?: Promise<Record<string, string | string[] | undefined>>
 ) {
-    const paramsObj = searchParams || {};
+    const paramsObj = (await searchParamsPromise) || {};
     const cleanParams = new URLSearchParams();
 
     for (const key of Object.keys(paramsObj)) {
@@ -21,8 +23,10 @@ async function getProducts(
         }
     }
 
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
     try {
-        const res = await fetch(`http://localhost:5000/api/products?${cleanParams.toString()}`, {
+        const res = await fetch(`${apiUrl}/api/products?${cleanParams.toString()}`, {
             cache: 'no-store',
         });
         if (!res.ok) return [];
@@ -32,16 +36,15 @@ async function getProducts(
         return [];
     }
 }
-export default async function Home({
-    searchParams,
-}: {
-    searchParams?: Record<string, string | string[] | undefined>;
+export default async function Home(props: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-    const products = await getProducts(searchParams);
+    const products = await getProducts(props.searchParams);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
             <h1 className="text-4xl font-bold mb-6 text-gray-900">Marketplace</h1>
+            <AdBanner /> {/* Added AdBanner component */}
             <SearchFilters />
             <h2 className="text-2xl font-bold mb-6">Results ({products.length})</h2>
             {products.length === 0 ? (

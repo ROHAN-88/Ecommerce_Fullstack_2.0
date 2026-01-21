@@ -34,6 +34,12 @@ export default function Navbar() {
                         )}
 
                         {/* Buyer/Seller/Admin Links based on role */}
+                        {/* Buyer/Seller/Admin Links based on role */}
+                        {/* Buyer/Seller/Admin Links based on role */}
+                        {user && (
+                            <Link href="/wishlist" className="text-gray-700 hover:text-black">Wishlist</Link>
+                        )}
+
                         {user?.role === 'seller' && (
                             <Link href="/seller/dashboard" className="text-gray-700 hover:text-black">Seller Dashboard</Link>
                         )}

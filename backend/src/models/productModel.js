@@ -91,3 +91,9 @@ export const getProductById = async (id) => {
     const { rows } = await query(text, [id]);
     return rows[0];
 };
+
+export const getProductsBySellerId = async (sellerId) => {
+    const text = `SELECT * FROM products WHERE seller_id = $1 ORDER BY created_at DESC`;
+    const { rows } = await query(text, [sellerId]);
+    return rows;
+};

@@ -1,16 +1,27 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import pool from './config/db.js';
+import { pool } from './config/db.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+
 // Middleware
+app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+// Rate Limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
 
 // Passport
 import passport from './config/passport.js';
@@ -37,18 +48,40 @@ import { Server } from 'socket.io';
 import { createUsersTable } from './models/userModel.js';
 import { createProductsTable } from './models/productModel.js';
 import { createChatTables } from './models/chatModel.js';
+import { createAdsTable } from './models/adModel.js';
+import { createSellerTables } from './models/sellerModel.js';
+import { createWishlistTable } from './models/wishlistModel.js';
 
 // Init DB
 createUsersTable();
 createProductsTable();
 createChatTables();
+createAdsTable();
+createSellerTables();
+createWishlistTable();
 
 import chatRoutes from './routes/chatRoutes.js';
 import productRoutes from './routes/productRoutes.js';
+import adRoutes from './routes/adRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import wishlistRoutes from './routes/wishlistRoutes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/ads', adRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        message: 'Internal Server Error',
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+});
+
 const server = createServer(app);
 const io = new Server(server, {
     cors: {

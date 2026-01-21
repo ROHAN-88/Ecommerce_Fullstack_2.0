@@ -1,11 +1,12 @@
 import express from 'express';
 import passport from '../config/passport.js'; // Import configured passport
 import jwt from 'jsonwebtoken';
-import { register, login } from '../controllers/authController.js';
+import { register, login, registerSeller } from '../controllers/authController.js';
 
 const router = express.Router();
 
 router.post('/register', register);
+router.post('/register-seller', registerSeller);
 router.post('/login', login);
 
 // OAuth Helper to issue token

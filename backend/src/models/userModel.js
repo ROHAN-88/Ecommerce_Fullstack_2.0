@@ -40,6 +40,7 @@ export const createUsersTable = async () => {
     await query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL;`);
     await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS provider VARCHAR(20) DEFAULT 'local';`);
     await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_id VARCHAR(255);`);
+    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';`); // active, suspended, banned
   } catch (err) {
     console.error('Error creating/updating users table:', err);
   }
@@ -54,10 +55,31 @@ export const findUserByEmail = async (email) => {
 export const createUser = async ({ name, email, password, role = 'buyer', provider = 'local', provider_id = null }) => {
   console.log('DEBUG CHECK createUser:', { name, email, role, provider });
   const text = `
-    INSERT INTO users (name, email, password, role, provider, provider_id)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    INSERT INTO users (name, email, password, role, provider, provider_id, status)
+    VALUES ($1, $2, $3, $4, $5, $6, 'active')
     RETURNING id, name, email, role, provider, created_at;
   `;
   const { rows } = await query(text, [name, email, password, role, provider, provider_id]);
   return rows[0];
+};
+
+export const getAllUsers = async () => {
+  const text = 'SELECT id, name, email, role, status, created_at FROM users ORDER BY created_at DESC';
+  const { rows } = await query(text);
+  return rows;
+};
+
+export const updateUserStatus = async (id, status) => {
+  const text = 'UPDATE users SET status = $1 WHERE id = $2 RETURNING id, name, email, status';
+  const { rows } = await query(text, [status, id]);
+  return rows[0];
+};
+
+export const getUserStats = async () => {
+  const totalUsers = await query('SELECT COUNT(*) FROM users');
+  const roleCounts = await query('SELECT role, COUNT(*) FROM users GROUP BY role');
+  return {
+    total: parseInt(totalUsers.rows[0].count),
+    byRole: roleCounts.rows
+  };
 };
